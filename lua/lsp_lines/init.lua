@@ -4,6 +4,7 @@ local render = require("lsp_lines.render")
 
 local function render_current_line(diagnostics, ns, bufnr, opts)
   local current_line_diag = {}
+  local not_current_line_diag = {}
   local lnum = vim.api.nvim_win_get_cursor(0)[1] - 1
 
   for _, diagnostic in pairs(diagnostics) do
@@ -11,17 +12,30 @@ local function render_current_line(diagnostics, ns, bufnr, opts)
       or (lnum == diagnostic.lnum)
     if show then
       table.insert(current_line_diag, diagnostic)
+    else
+      table.insert(not_current_line_diag, diagnostic)
     end
   end
 
   render.show(ns, bufnr, current_line_diag, opts)
+  if opts.virtual_lines and opts.virtual_lines.only_current_line.virtual_text then
+    render.show(
+      ns,
+      bufnr,
+      not_current_line_diag,
+      opts.virtual_lines.only_current_line.virtual_text,
+      nil,
+      "virt_text",
+      false
+    )
+  end
 end
 
 ---@class Opts
 ---@field virtual_lines OptsVirtualLines Options for lsp_lines plugin
 
 ---@class OptsVirtualLines
----@field only_current_line boolean Only render for current line
+---@field only_current_line boolean|table Options for rendering only on current line
 ---@field highlight_whole_line boolean Highlight empty space to the left of a diagnostic
 
 -- Registers a wrapper-handler to render lsp lines.
@@ -40,8 +54,20 @@ M.setup = function()
         ns.user_data.virt_lines_ns = vim.api.nvim_create_namespace("")
       end
 
+      if opts.virtual_lines.only_current_line == nil then
+        opts.virtual_lines.only_current_line = {
+          enable = false,
+        }
+      elseif type(opts.virtual_lines.only_current_line) == "boolean" then
+        opts.virtual_lines.only_current_line = {
+          enable = opts.virtual_lines.only_current_line,
+        }
+      else
+        opts.virtual_lines.only_current_line.enable = true
+      end
+
       vim.api.nvim_clear_autocmds({ group = "LspLines" })
-      if opts.virtual_lines.only_current_line then
+      if opts.virtual_lines.only_current_line.enable then
         vim.api.nvim_create_autocmd("CursorMoved", {
           buffer = bufnr,
           callback = function()

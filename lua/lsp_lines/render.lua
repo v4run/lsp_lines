@@ -38,44 +38,15 @@ local function distance_between_cols(bufnr, lnum, start_col, end_col)
   end)
 end
 
----@param namespace number
----@param bufnr number
----@param diagnostics table
----@param opts boolean|Opts
----@param source 'native'|'coc'|nil If nil, defaults to 'native'.
-function M.show(namespace, bufnr, diagnostics, opts, source)
-  if not vim.api.nvim_buf_is_loaded(bufnr) then return end
-  vim.validate({
-    namespace = { namespace, "n" },
-    bufnr = { bufnr, "n" },
-    diagnostics = {
-      diagnostics,
-      vim.islist or vim.tbl_islist,
-      "a list of diagnostics",
-    },
-    opts = { opts, "t", true },
-  })
-
-  table.sort(diagnostics, function(a, b)
-    if a.lnum ~= b.lnum then
-      return a.lnum < b.lnum
-    else
-      return a.col < b.col
-    end
-  end)
-
-  vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
-  if #diagnostics == 0 then
-    return
-  end
-  local highlight_groups = HIGHLIGHTS[source or "native"]
-
+-- TODO: rename to M._get_virt_lines_chunks
+local function render_as_virt_lines(namespace, bufnr, diagnostics, opts, source)
   -- This loop reads line by line, and puts them into stacks with some
   -- extra data, since rendering each line will require understanding what
   -- is beneath it.
   local line_stacks = {}
   local prev_lnum = -1
   local prev_col = 0
+  local highlight_groups = HIGHLIGHTS[source or "native"]
   for _, diagnostic in ipairs(diagnostics) do
     if line_stacks[diagnostic.lnum] == nil then
       line_stacks[diagnostic.lnum] = {}
@@ -178,7 +149,8 @@ function M.show(namespace, bufnr, diagnostics, opts, source)
 
         local msg
         if diagnostic.code then
-          msg = string.format("%s: %s", diagnostic.code, diagnostic.message)
+          -- msg = string.format("%s: %s", diagnostic.code, diagnostic.message)
+          msg = diagnostic.message
         else
           msg = diagnostic.message
         end
@@ -201,6 +173,138 @@ function M.show(namespace, bufnr, diagnostics, opts, source)
     end
 
     vim.api.nvim_buf_set_extmark(bufnr, namespace, lnum, 0, { virt_lines = virt_lines })
+  end
+end
+
+local severities = {
+  vim.diagnostic.severity.ERROR,
+  vim.diagnostic.severity.WARN,
+  vim.diagnostic.severity.INFO,
+  vim.diagnostic.severity.HINT,
+}
+
+-- TODO: rename to M._get_virt_text_chunks ???
+local function render_as_virt_text(namespace, bufnr, diagnostics, opts, source)
+  local highlight_groups = HIGHLIGHTS[source or "native"]
+  -- FIX: diagnostic spanning across multiple lines can cause problem with virtual texts
+  -- FIX: New line in virtual text
+  -- FIX: The diagnostics already existing in the file not behaving properly
+  -- FIX: Possible issues with inlay hints
+  -- FIX: Make configurable highlights for virtual text. Try for virtual lines.
+  -- FIX: Work in insert mode
+  -- SUGGEST: Group by severity and show independant count in virt text
+  -- if opts and opts.virtual_lines and opts.virtual_lines.virtual_text then
+  --   opts = opts.virtual_lines.virtual_text
+  -- else
+  --   opts = {}
+  -- end
+  opts = opts or {}
+  local line_diagnostics = {}
+  local line_count = vim.api.nvim_buf_line_count(bufnr)
+
+  -- group diagnostics by line number and severity
+  for _, d in ipairs(diagnostics) do
+    if line_diagnostics[d.lnum] == nil then
+      line_diagnostics[d.lnum] = {}
+    end
+    if line_diagnostics[d.lnum][d.severity] == nil then
+      line_diagnostics[d.lnum][d.severity] = {}
+    end
+    local diags = line_diagnostics[d.lnum][d.severity]
+    table.insert(diags, d)
+  end
+
+  local prefix = opts.prefix or "■"
+  -- local suffix = opts.suffix or ""
+  local spacing = opts.spacing or 4
+
+  -- separate out best diagnostic and add just the prefix for remaining diagnostics for a line
+  for _, diags in pairs(line_diagnostics) do
+    local index = 1
+    local best = nil
+    local virt_texts = { { string.rep(" ", spacing) } }
+    for _, severity in ipairs(severities) do
+      if diags[severity] ~= nil then
+        for _, diagnostic in ipairs(diags[severity]) do
+          local resolved_prefix = {}
+          if type(prefix) == "function" then
+            resolved_prefix = prefix(diagnostic, index, #diags)
+          elseif type(prefix) == "string" then
+            resolved_prefix = { prefix, highlight_groups[diagnostic.severity] }
+          end
+          if best == nil then
+            best = { prefix = resolved_prefix, diagnostic = diagnostic }
+          else
+            table.insert(virt_texts, resolved_prefix)
+          end
+          index = index + 1
+        end
+      end
+    end
+    if best == nil then
+      -- For some reason best is nil. This should not happen unless there is an undefined diagnostic severity
+      return
+    end
+    table.insert(virt_texts, best.prefix)
+    table.insert(virt_texts, {
+      string.format(" %s", best.diagnostic.message:gsub("\r", ""):gsub("\n", " ")),
+      highlight_groups[best.diagnostic.severity],
+    })
+    if best.diagnostic.lnum <= line_count then
+      vim.api.nvim_buf_set_extmark(
+        best.diagnostic.bufnr,
+        namespace,
+        best.diagnostic.lnum,
+        0,
+        { virt_text = virt_texts }
+      )
+    end
+  end
+end
+
+---@param namespace number
+---@param bufnr number
+---@param diagnostics table
+---@param opts boolean|Opts
+---@param source 'native'|'coc'|nil If nil, defaults to 'native'.
+---@param render_area 'virt_lines'|'virt_text'|nil If nil, defaults to 'virt_lines'.
+---@param clear boolean|nil
+function M.show(namespace, bufnr, diagnostics, opts, source, render_area, clear)
+  if not vim.api.nvim_buf_is_loaded(bufnr) then
+    return
+  end
+  vim.validate({
+    namespace = { namespace, "n" },
+    bufnr = { bufnr, "n" },
+    diagnostics = {
+      diagnostics,
+      vim.islist or vim.tbl_islist,
+      "a list of diagnostics",
+    },
+    opts = { opts, "t", true },
+  })
+
+  table.sort(diagnostics, function(a, b)
+    if a.lnum ~= b.lnum then
+      return a.lnum < b.lnum
+    else
+      return a.col < b.col
+    end
+  end)
+
+  if clear == nil then
+    clear = true
+  end
+  if clear then
+    vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
+  end
+  if #diagnostics == 0 then
+    return
+  end
+  if render_area ~= "virt_text" then
+    render_as_virt_lines(namespace, bufnr, diagnostics, opts, source)
+  else
+    render_as_virt_text(namespace, bufnr, diagnostics, opts, source)
   end
 end
 
