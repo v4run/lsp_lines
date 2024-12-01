@@ -12,7 +12,8 @@ local function render_current_line(diagnostics, ns, bufnr, opts)
       or (lnum == diagnostic.lnum)
     if show then
       table.insert(current_line_diag, diagnostic)
-    else
+    end
+    if lnum ~= diagnostic.lnum then
       table.insert(not_current_line_diag, diagnostic)
     end
   end
