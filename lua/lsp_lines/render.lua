@@ -231,6 +231,8 @@ local function render_as_virt_text(namespace, bufnr, diagnostics, opts, source)
             resolved_prefix = prefix(diagnostic, index, #diags)
           elseif type(prefix) == "string" then
             resolved_prefix = { prefix, highlight_groups[diagnostic.severity] }
+          else
+            resolved_prefix = prefix
           end
           if best == nil then
             best = { prefix = resolved_prefix, diagnostic = diagnostic }
