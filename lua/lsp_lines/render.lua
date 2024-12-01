@@ -116,7 +116,7 @@ local function render_as_virt_lines(namespace, bufnr, diagnostics, opts, source)
             overlap = false
           elseif type == BLANK then
             if multi == 0 then
-              table.insert(left, { "└", highlight_groups[data.severity] })
+              table.insert(left, { "╰", highlight_groups[data.severity] })
             else
               table.insert(left, { "┴", highlight_groups[data.severity] })
             end
@@ -134,11 +134,11 @@ local function render_as_virt_lines(namespace, bufnr, diagnostics, opts, source)
         elseif multi > 0 then
           center_symbol = "┴"
         else
-          center_symbol = "└"
+          center_symbol = "╰"
         end
         -- local center_text =
         local center = {
-          { string.format("%s%s", center_symbol, "──── "), highlight_groups[diagnostic.severity] },
+          { string.format("%s%s", center_symbol, "───⊙ "), highlight_groups[diagnostic.severity] },
         }
 
         -- TODO: We can draw on the left side if and only if:
