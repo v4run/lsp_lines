@@ -159,6 +159,10 @@ local function render_as_virt_lines(namespace, bufnr, diagnostics, opts, source)
           vim.list_extend(vline, left)
           vim.list_extend(vline, center)
           vim.list_extend(vline, { { msg_line, highlight_groups[diagnostic.severity] } })
+          vim.list_extend(
+            vline,
+            { { string.rep(" ", vim.api.nvim_win_get_width(0)), highlight_groups[diagnostic.severity] } }
+          )
 
           table.insert(virt_lines, vline)
 
@@ -227,6 +231,9 @@ local function render_as_virt_text(namespace, bufnr, diagnostics, opts, source)
       if diags[severity] ~= nil then
         for _, diagnostic in ipairs(diags[severity]) do
           local resolved_prefix = {}
+          if #virt_texts == 1 then
+            table.insert(virt_texts, { " ", highlight_groups[diagnostic.severity] })
+          end
           if type(prefix) == "function" then
             resolved_prefix = prefix(diagnostic, index, #diags)
           elseif type(prefix) == "string" then
@@ -249,7 +256,7 @@ local function render_as_virt_text(namespace, bufnr, diagnostics, opts, source)
     end
     table.insert(virt_texts, best.prefix)
     table.insert(virt_texts, {
-      string.format(" %s", best.diagnostic.message:gsub("\r", ""):gsub("\n", " ")),
+      string.format(" %s ", best.diagnostic.message:gsub("\r", ""):gsub("\n", " ")),
       highlight_groups[best.diagnostic.severity],
     })
     if best.diagnostic.lnum <= line_count then
