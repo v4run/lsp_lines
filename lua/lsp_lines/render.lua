@@ -147,7 +147,12 @@ local function render_as_virt_lines(namespace, bufnr, diagnostics, opts, source)
         local center = {
           { string.format("%s%s", center_symbol, "───"), highlight_groups[diagnostic.severity] },
         }
-        vim.list_extend(center, prefix_resolver(diagnostic))
+        local resolved_prefix = prefix_resolver(diagnostic)
+        local prefix_len = 0
+        for _, part in pairs(resolved_prefix) do
+          prefix_len = prefix_len + vim.fn.strdisplaywidth(part[1])
+        end
+        vim.list_extend(center, resolved_prefix)
 
         -- TODO: We can draw on the left side if and only if:
         -- a. Is the last one stacked this line.
@@ -176,9 +181,12 @@ local function render_as_virt_lines(namespace, bufnr, diagnostics, opts, source)
 
           -- Special-case for continuation lines:
           if overlap then
-            center = { { "│", highlight_groups[diagnostic.severity] }, { "     ", empty_space_hi } }
+            center = {
+              { "│", highlight_groups[diagnostic.severity] },
+              { "     " .. string.rep(" ", prefix_len), empty_space_hi },
+            }
           else
-            center = { { "      ", empty_space_hi } }
+            center = { { "      " .. string.rep(" ", prefix_len), empty_space_hi } }
           end
         end
       end
