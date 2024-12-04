@@ -52,7 +52,7 @@ M.setup = function()
     show = function(namespace, bufnr, diagnostics, opts)
       local ns = vim.diagnostic.get_namespace(namespace)
       if not ns.user_data.virt_lines_ns then
-        ns.user_data.virt_lines_ns = vim.api.nvim_create_namespace("")
+        ns.user_data.virt_lines_ns = vim.api.nvim_create_namespace("lsp_lines")
       end
 
       if opts.virtual_lines.only_current_line == nil then
