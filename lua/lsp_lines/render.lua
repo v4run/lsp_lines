@@ -47,6 +47,13 @@ local function render_as_virt_lines(namespace, bufnr, diagnostics, opts, source)
   local prev_lnum = -1
   local prev_col = 0
   local highlight_groups = HIGHLIGHTS[source or "native"]
+  local prefix = opts.virtual_lines.prefix or "■"
+  local prefix_resolver = function(diagnostic)
+    return { prefix, highlight_groups[diagnostic.severity] }
+  end
+  if type(prefix) == "function" then
+    prefix_resolver = prefix
+  end
   for _, diagnostic in ipairs(diagnostics) do
     if line_stacks[diagnostic.lnum] == nil then
       line_stacks[diagnostic.lnum] = {}
@@ -138,8 +145,9 @@ local function render_as_virt_lines(namespace, bufnr, diagnostics, opts, source)
         end
         -- local center_text =
         local center = {
-          { string.format("%s%s", center_symbol, "───⊙ "), highlight_groups[diagnostic.severity] },
+          { string.format("%s%s", center_symbol, "─── "), highlight_groups[diagnostic.severity] },
         }
+        vim.list_extend(center, prefix_resolver(diagnostic))
 
         -- TODO: We can draw on the left side if and only if:
         -- a. Is the last one stacked this line.
