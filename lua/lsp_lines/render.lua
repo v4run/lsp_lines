@@ -227,30 +227,36 @@ local function render_as_virt_text(namespace, bufnr, diagnostics, opts, source)
   end
 
   local prefix = opts.prefix or "■"
-  -- local suffix = opts.suffix or ""
   local spacing = opts.spacing or 4
   local only_count = opts.only_count or false
+  local prefix_resolver = nil
+  if type(prefix) == "function" then
+    prefix_resolver = prefix
+  elseif type(prefix) == "string" then
+    prefix_resolver = function(diagnostic, _, _)
+      return { prefix, highlight_groups[diagnostic.severity] }
+    end
+  else
+    prefix_resolver = function()
+      return prefix
+    end
+  end
 
   -- separate out best diagnostic and add just the prefix for remaining diagnostics for a line
   for _, diags in pairs(line_diagnostics) do
     local index = 1
     local best = nil
     local virt_texts = { { string.rep(" ", spacing) } }
-    local severity_counts = {}
+    -- local severity_counts = {}
     for _, severity in ipairs(severities) do
       if diags[severity] ~= nil then
-        severity_counts[severity] = #diags[severity]
+        -- severity_counts[severity] = #diags[severity]
         for _, diagnostic in ipairs(diags[severity]) do
-          local resolved_prefix = {}
-          if type(prefix) == "function" then
-            resolved_prefix = prefix(diagnostic, index, #diags)
-          elseif type(prefix) == "string" then
-            resolved_prefix = { prefix, highlight_groups[diagnostic.severity] }
-          else
-            resolved_prefix = prefix
-          end
+          local resolved_prefix = prefix_resolver(diagnostic, index, #diags)
           if best == nil then
-            best = { prefix = resolved_prefix, diagnostic = diagnostic }
+            if diagnostic.message:gsub("%s+$", "") ~= "" then
+              best = { prefix = resolved_prefix, diagnostic = diagnostic }
+            end
           else
             if not only_count then
               table.insert(virt_texts, resolved_prefix)
@@ -273,12 +279,18 @@ local function render_as_virt_text(namespace, bufnr, diagnostics, opts, source)
     if only_count then
       for i = #severities, 1, -1 do
         local severity = severities[i]
-        local count = severity_counts[severity]
-        if count ~= nil then
-          if severity ~= best.diagnostic.severity and count > 1 then
-            table.insert(virt_texts, { string.format("[+%d] ", count), highlight_groups[severity] })
-          elseif severity == best.diagnostic.severity and count > 2 then
-            table.insert(virt_texts, { string.format("[+%d] ", count - 1), highlight_groups[severity] })
+        local ds = diags[severity]
+        if ds then
+          local count = #ds
+          if count ~= nil then
+            if severity ~= best.diagnostic.severity then
+              table.insert(virt_texts, { string.format("[+%d] ", count), highlight_groups[severity] })
+            elseif severity == best.diagnostic.severity then
+              if count > 1 then
+                table.insert(virt_texts, { string.format("[+%d] ", count - 1), highlight_groups[severity] })
+              end
+            else
+            end
           end
         end
       end
