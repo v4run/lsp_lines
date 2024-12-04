@@ -145,7 +145,7 @@ local function render_as_virt_lines(namespace, bufnr, diagnostics, opts, source)
         end
         -- local center_text =
         local center = {
-          { string.format("%s%s", center_symbol, "─── "), highlight_groups[diagnostic.severity] },
+          { string.format("%s%s", center_symbol, "───"), highlight_groups[diagnostic.severity] },
         }
         vim.list_extend(center, prefix_resolver(diagnostic))
 
@@ -229,14 +229,17 @@ local function render_as_virt_text(namespace, bufnr, diagnostics, opts, source)
   local prefix = opts.prefix or "■"
   -- local suffix = opts.suffix or ""
   local spacing = opts.spacing or 4
+  local only_count = opts.only_count or false
 
   -- separate out best diagnostic and add just the prefix for remaining diagnostics for a line
   for _, diags in pairs(line_diagnostics) do
     local index = 1
     local best = nil
     local virt_texts = { { string.rep(" ", spacing) } }
+    local severity_counts = {}
     for _, severity in ipairs(severities) do
       if diags[severity] ~= nil then
+        severity_counts[severity] = #diags[severity]
         for _, diagnostic in ipairs(diags[severity]) do
           local resolved_prefix = {}
           if type(prefix) == "function" then
@@ -249,12 +252,15 @@ local function render_as_virt_text(namespace, bufnr, diagnostics, opts, source)
           if best == nil then
             best = { prefix = resolved_prefix, diagnostic = diagnostic }
           else
-            table.insert(virt_texts, resolved_prefix)
+            if not only_count then
+              table.insert(virt_texts, resolved_prefix)
+            end
           end
           index = index + 1
         end
       end
     end
+
     if best == nil then
       -- For some reason best is nil. This should not happen unless there is an undefined diagnostic severity
       return
@@ -264,6 +270,19 @@ local function render_as_virt_text(namespace, bufnr, diagnostics, opts, source)
       string.format(" %s ", best.diagnostic.message:gsub("\r", ""):gsub("\n", " ")),
       highlight_groups[best.diagnostic.severity],
     })
+    if only_count then
+      for i = #severities, 1, -1 do
+        local severity = severities[i]
+        local count = severity_counts[severity]
+        if count ~= nil then
+          if severity ~= best.diagnostic.severity and count > 1 then
+            table.insert(virt_texts, { string.format("[+%d] ", count), highlight_groups[severity] })
+          elseif severity == best.diagnostic.severity and count > 2 then
+            table.insert(virt_texts, { string.format("[+%d] ", count - 1), highlight_groups[severity] })
+          end
+        end
+      end
+    end
     if best.diagnostic.lnum <= line_count then
       vim.api.nvim_buf_set_extmark(
         best.diagnostic.bufnr,
