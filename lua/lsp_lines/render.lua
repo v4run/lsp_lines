@@ -231,9 +231,6 @@ local function render_as_virt_text(namespace, bufnr, diagnostics, opts, source)
       if diags[severity] ~= nil then
         for _, diagnostic in ipairs(diags[severity]) do
           local resolved_prefix = {}
-          if #virt_texts == 1 then
-            table.insert(virt_texts, { " ", highlight_groups[diagnostic.severity] })
-          end
           if type(prefix) == "function" then
             resolved_prefix = prefix(diagnostic, index, #diags)
           elseif type(prefix) == "string" then
